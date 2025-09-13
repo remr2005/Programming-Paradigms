@@ -21,3 +21,9 @@ target_link_libraries(main1
     mongocxx
     bsoncxx
 )
+
+target_link_libraries(main2
+    PRIVATE
+    mongocxx
+    bsoncxx
+)
