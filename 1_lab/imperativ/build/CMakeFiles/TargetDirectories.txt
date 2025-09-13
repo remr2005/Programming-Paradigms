@@ -1,0 +1,4 @@
+/home/kemran/paradigm/1_lab/imperativ/build/CMakeFiles/main1.dir
+/home/kemran/paradigm/1_lab/imperativ/build/CMakeFiles/main2.dir
+/home/kemran/paradigm/1_lab/imperativ/build/CMakeFiles/edit_cache.dir
+/home/kemran/paradigm/1_lab/imperativ/build/CMakeFiles/rebuild_cache.dir
