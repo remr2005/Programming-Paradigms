@@ -9,7 +9,7 @@
 
 class MongoDBHandler {
 private:
-    mongocxx::instance instance;   // один на всё приложение
+    mongocxx::instance instance;
     mongocxx::client client;
     mongocxx::database db;
     mongocxx::collection collection;
@@ -31,18 +31,12 @@ public:
     ) {
         bsoncxx::builder::basic::document filter;
 
-        if (op == "$regex") {
-            // regex кладём напрямую
-            filter.append(bsoncxx::builder::basic::kvp(field, value));
-        } else {
-            // обычные операторы
-            filter.append(bsoncxx::builder::basic::kvp(
-                field,
-                bsoncxx::builder::basic::make_document(
-                    bsoncxx::builder::basic::kvp(op, value)
-                )
-            ));
-        }
+         filter.append(bsoncxx::builder::basic::kvp(
+            field,
+            bsoncxx::builder::basic::make_document(
+                bsoncxx::builder::basic::kvp(op, value)
+            )
+        ));
 
         return filter;
     }
