@@ -8,6 +8,8 @@
 #include <iostream>
 
 
+bsoncxx::builder::basic::document filter;
+
 void print_collection(mongocxx::collection& collection,
                       const bsoncxx::builder::basic::document& filter) {
     auto cursor = collection.find(filter.view());
@@ -17,21 +19,20 @@ void print_collection(mongocxx::collection& collection,
 }
 
 
-bsoncxx::builder::basic::document build_filter(
+void build_filter(
     const std::string& field,
     const std::string& op,
     const bsoncxx::types::bson_value::value& value
 ) {
-    bsoncxx::builder::basic::document filter;
-
-        filter.append(bsoncxx::builder::basic::kvp(
-            field,
-            bsoncxx::builder::basic::make_document(
-                bsoncxx::builder::basic::kvp(op, value)
-            )
-        ));
-
-    return filter;
+    // Очищаем фильтр перед добавлением новых условий
+    filter = bsoncxx::builder::basic::document{};
+    
+    filter.append(bsoncxx::builder::basic::kvp(
+        field,
+        bsoncxx::builder::basic::make_document(
+            bsoncxx::builder::basic::kvp(op, value)
+        )
+    ));
 }
 
 
@@ -43,12 +44,11 @@ int main() {
 
     std :: cout << "Возраст меньше 19" << std :: endl;
     // Пример: возраст < 19
-    auto filter1 = build_filter(
+    build_filter(
         "Возраст",
         "$lt",
         bsoncxx::types::bson_value::value{bsoncxx::types::b_int64{19}}
     );
-    print_collection(collection, filter1);
-
-    return 0;
+    
+    print_collection(collection, filter);
 }

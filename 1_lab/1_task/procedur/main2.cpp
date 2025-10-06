@@ -8,6 +8,10 @@
 #include <iostream>
 
 
+
+bsoncxx::builder::basic::document filter;
+
+
 void print_collection(mongocxx::collection& collection,
                       const bsoncxx::builder::basic::document& filter) {
     auto cursor = collection.find(filter.view());
@@ -17,12 +21,12 @@ void print_collection(mongocxx::collection& collection,
 }
 
 
-bsoncxx::builder::basic::document build_filter(
+void build_filter(
     const std::string& field,
     const std::string& op,
     const bsoncxx::types::bson_value::value& value
 ) {
-    bsoncxx::builder::basic::document filter;
+    filter = bsoncxx::builder::basic::document{};
 
         filter.append(bsoncxx::builder::basic::kvp(
             field,
@@ -31,7 +35,6 @@ bsoncxx::builder::basic::document build_filter(
             )
         ));
 
-    return filter;
 }
 
 
@@ -43,12 +46,11 @@ int main() {
 
     std :: cout << "Фамилия на А" << std :: endl;
 
-    auto filter2 = build_filter(
+    build_filter(
         "Фамилия",
         "$regex",
         bsoncxx::types::bson_value::value{bsoncxx::types::b_regex{"^А"}}
     );
-    print_collection(collection, filter2);
+    print_collection(collection, filter);
 
-    return 0;
 }

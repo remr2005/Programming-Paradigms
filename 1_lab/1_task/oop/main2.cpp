@@ -13,6 +13,7 @@ private:
     mongocxx::client client;
     mongocxx::database db;
     mongocxx::collection collection;
+    bsoncxx::builder::basic::document filter_;
 
 public:
     // Конструктор
@@ -23,27 +24,24 @@ public:
           db{client[db_name]},
           collection{db[coll_name]} {}
 
-    // Метод для построения фильтра
-    bsoncxx::builder::basic::document build_filter(
+    // Метод для построения фильтра (обновляет поле класса)
+    void build_filter(
         const std::string& field,
         const std::string& op,
         const bsoncxx::types::bson_value::value& value
     ) {
-        bsoncxx::builder::basic::document filter;
-
-         filter.append(bsoncxx::builder::basic::kvp(
+        filter_ = bsoncxx::builder::basic::document{};
+        filter_.append(bsoncxx::builder::basic::kvp(
             field,
             bsoncxx::builder::basic::make_document(
                 bsoncxx::builder::basic::kvp(op, value)
             )
         ));
-
-        return filter;
     }
 
-    // Метод для вывода документов
-    void print_collection(const bsoncxx::builder::basic::document& filter) {
-        auto cursor = collection.find(filter.view());
+    // Метод для вывода документов (использует фильтр класса)
+    void print_collection() {
+        auto cursor = collection.find(filter_.view());
         for (auto&& doc : cursor) {
             std::cout << bsoncxx::to_json(doc) << std::endl;
         }
@@ -56,16 +54,15 @@ int main() {
 
         std::cout << "Фамилия на А:" << std::endl;
 
-        auto filter = handler.build_filter(
+        handler.build_filter(
             "Фамилия",
             "$regex",
             bsoncxx::types::bson_value::value{bsoncxx::types::b_regex{"^А"}}
         );
 
-        handler.print_collection(filter);
+        handler.print_collection();
 
     } catch (const std::exception& e) {
         std::cerr << "Ошибка: " << e.what() << std::endl;
     }
-    return 0;
 }

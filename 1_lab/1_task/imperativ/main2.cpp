@@ -25,9 +25,9 @@ int main() {
 
     auto cursor = collection.find(filter_builder.view());
 
+    // Вывод документов
     for (auto&& doc : cursor) {
         std::cout << bsoncxx::to_json(doc) << std::endl;
     }
 
-    return 0;
 }
