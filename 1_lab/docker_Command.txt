@@ -1,6 +1,6 @@
-# Пересоздайте контейнер без пароля
-docker stop mongodb-lab
-docker rm mongodb-lab
-docker run -d --name mongodb-lab -p 27017:27017 -v mongodb_data:/data/db mongo:7.0
 
-docker exec -it mongodb-lab mongosh
+sudo docker stop mongodb-lab
+sudo docker rm mongodb-lab
+sudo docker run -d --name mongodb-lab -p 27017:27017 -v mongodb_data:/data/db mongo:7.0
+
+sudo docker exec -it mongodb-lab mongosh
