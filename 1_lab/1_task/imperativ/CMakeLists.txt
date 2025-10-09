@@ -14,6 +14,8 @@ link_directories(/usr/local/lib)
 
 add_executable(main1 main1.cpp)
 add_executable(main2 main2.cpp)
+add_executable(main3 main3.cpp)
+
 
 # Линкуем
 target_link_libraries(main1
@@ -23,6 +25,12 @@ target_link_libraries(main1
 )
 
 target_link_libraries(main2
+    PRIVATE
+    mongocxx
+    bsoncxx
+)
+
+target_link_libraries(main3
     PRIVATE
     mongocxx
     bsoncxx

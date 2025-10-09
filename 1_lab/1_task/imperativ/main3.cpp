@@ -7,18 +7,22 @@
 #include <iomanip>
 
 int main() {
-    // Подключаемся к MongoDB
+    // Инициализация драйвера
     mongocxx::instance instance{};
     mongocxx::client client{mongocxx::uri{"mongodb://localhost:27017"}};
 
     auto db = client["university"];
     auto collection = db["students"];
 
-    // Фильтр: возраст меньше 19
+    
     bsoncxx::builder::basic::document filter_builder;
+    filter_builder.append(bsoncxx::builder::basic::kvp("Средний_балл", bsoncxx::builder::basic::make_document(
+        bsoncxx::builder::basic::kvp("$lt", 4.0)
+    )));
     filter_builder.append(bsoncxx::builder::basic::kvp("Возраст", bsoncxx::builder::basic::make_document(
         bsoncxx::builder::basic::kvp("$lt", 19)
     )));
+
 
     auto cursor = collection.find(filter_builder.view());
 
@@ -33,21 +37,24 @@ int main() {
         ++index;
         ++count;
 
-        // Получаем данные студента
+        // Извлекаем поля
         std::string firstName = doc["Имя"] ? std::string(doc["Имя"].get_string().value) : "";
         std::string lastName  = doc["Фамилия"] ? std::string(doc["Фамилия"].get_string().value) : "";
         std::string group     = doc["Группа"] ? std::string(doc["Группа"].get_string().value) : "";
-        int age = doc["Возраст"] ? doc["Возраст"].get_int32().value : 0;
-        double avg = doc["Средний_балл"] ? doc["Средний_балл"].get_double().value : 0.0;
         
+        // Возраст
+        int age = doc["Возраст"] ? doc["Возраст"].get_int32().value : 0;
+        
+        // Средний балл
+        double avg = doc["Средний_балл"] ? doc["Средний_балл"].get_double().value : 0.0;
         totalAverage += avg;
         
-        // Ищем максимальный балл
+        // Поиск максимального среднего балла
         if (avg > maxAverage) {
             maxAverage = avg;
         }
 
-        // Выводим студента
+        // Красивый вывод в одну строку на студента
         std::cout << index << ") "
                   << lastName << " " << firstName
                   << ", возраст: " << age
@@ -65,7 +72,7 @@ int main() {
                   << std::defaultfloat
                   << std::endl;
         
-        // Показываем максимальный балл
+        // Вывод максимального среднего балла
         std::cout << "Максимальный средний балл среди найденных студентов: "
                   << std::fixed << std::setprecision(2) << maxAverage
                   << std::defaultfloat

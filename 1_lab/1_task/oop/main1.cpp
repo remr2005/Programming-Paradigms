@@ -8,13 +8,14 @@
 #include <iostream>
 #include <iomanip>
 
+// Класс для работы с MongoDB
 class MongoDBHandler {
 private:
     mongocxx::instance instance;
     mongocxx::client client;
     mongocxx::database db;
     mongocxx::collection collection;
-    bsoncxx::builder::basic::document filter_;
+    bsoncxx::builder::basic::document filter_;  // Фильтр как поле класса
 
 public:
     // Конструктор
@@ -25,13 +26,12 @@ public:
           db{client[db_name]},
           collection{db[coll_name]} {}
 
-    // Метод для построения фильтра (обновляет поле класса)
+    // Добавляем условие в фильтр
     void build_filter(
         const std::string& field,
         const std::string& op,
         const bsoncxx::types::bson_value::value& value
     ) {
-        filter_ = bsoncxx::builder::basic::document{};
         filter_.append(bsoncxx::builder::basic::kvp(
             field,
             bsoncxx::builder::basic::make_document(
@@ -39,15 +39,20 @@ public:
             )
         ));
     }
+    
+    // Очищаем фильтр
+    void clear_filter() {
+        filter_ = bsoncxx::builder::basic::document{};
+    }
 
-    // Метод для вывода документов (использует фильтр класса)
+    // Выводим студентов
     void print_collection() {
         auto cursor = collection.find(filter_.view());
 
         std::cout << "Студенты:" << std::endl;
 
-        std::size_t index = 0;
-        std::size_t count = 0;
+        int index = 0;
+        int count = 0;
         double totalAverage = 0.0;
         double maxAverage = 0.0;
 
@@ -61,7 +66,7 @@ public:
             std::string group     = doc["Группа"] ? std::string(doc["Группа"].get_string().value) : "";
             
             // Возраст
-            int32_t age = doc["Возраст"] ? doc["Возраст"].get_int32().value : 0;
+            int age = doc["Возраст"] ? doc["Возраст"].get_int32().value : 0;
             
             // Средний балл
             double avg = doc["Средний_балл"] ? doc["Средний_балл"].get_double().value : 0.0;
@@ -105,13 +110,18 @@ int main() {
     try {
         MongoDBHandler handler("mongodb://localhost:27017", "university", "students");
 
-        std::cout << "Возраст меньше 19" << std::endl;
+        std::cout << "Студенты: возраст < 19 И средний балл < 4.0" << std::endl;
 
+        // Очищаем фильтр перед началом
+        handler.clear_filter();
+        
+        // возраст < 19
         handler.build_filter(
             "Возраст",
             "$lt",
-            bsoncxx::types::bson_value::value{bsoncxx::types::b_int64{19}}
+            19
         );
+        
 
         handler.print_collection();
 

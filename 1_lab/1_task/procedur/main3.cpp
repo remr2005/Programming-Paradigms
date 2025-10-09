@@ -1,53 +1,49 @@
 #include <mongocxx/client.hpp>
 #include <mongocxx/instance.hpp>
 #include <mongocxx/uri.hpp>
+#include <mongocxx/collection.hpp>
 #include <bsoncxx/json.hpp>
 #include <bsoncxx/builder/basic/document.hpp>
+#include <bsoncxx/types/bson_value/value.hpp>
 #include <iostream>
 #include <iomanip>
 
-int main() {
-    // Подключаемся к MongoDB
-    mongocxx::instance instance{};
-    mongocxx::client client{mongocxx::uri{"mongodb://localhost:27017"}};
 
-    auto db = client["university"];
-    auto collection = db["students"];
+bsoncxx::builder::basic::document filter;
 
-    // Фильтр: возраст меньше 19
-    bsoncxx::builder::basic::document filter_builder;
-    filter_builder.append(bsoncxx::builder::basic::kvp("Возраст", bsoncxx::builder::basic::make_document(
-        bsoncxx::builder::basic::kvp("$lt", 19)
-    )));
-
-    auto cursor = collection.find(filter_builder.view());
-
+void print_collection(mongocxx::collection& collection,
+                      const bsoncxx::builder::basic::document& filter) {
+    auto cursor = collection.find(filter.view());
+    
     std::cout << "Студенты:" << std::endl;
-
+    
     int index = 0;
     int count = 0;
     double totalAverage = 0.0;
     double maxAverage = 0.0;
-
+    
     for (auto&& doc : cursor) {
         ++index;
         ++count;
-
-        // Получаем данные студента
+        
+        // Извлекаем поля
         std::string firstName = doc["Имя"] ? std::string(doc["Имя"].get_string().value) : "";
         std::string lastName  = doc["Фамилия"] ? std::string(doc["Фамилия"].get_string().value) : "";
         std::string group     = doc["Группа"] ? std::string(doc["Группа"].get_string().value) : "";
-        int age = doc["Возраст"] ? doc["Возраст"].get_int32().value : 0;
-        double avg = doc["Средний_балл"] ? doc["Средний_балл"].get_double().value : 0.0;
         
+        // Возраст
+        int age = doc["Возраст"] ? doc["Возраст"].get_int32().value : 0;
+        
+        // Средний балл
+        double avg = doc["Средний_балл"] ? doc["Средний_балл"].get_double().value : 0.0;
         totalAverage += avg;
         
-        // Ищем максимальный балл
+        // Поиск максимального среднего балла
         if (avg > maxAverage) {
             maxAverage = avg;
         }
-
-        // Выводим студента
+        
+        // Красивый вывод в одну строку на студента
         std::cout << index << ") "
                   << lastName << " " << firstName
                   << ", возраст: " << age
@@ -56,7 +52,7 @@ int main() {
                   << std::defaultfloat
                   << std::endl;
     }
-
+    
     if (count > 0) {
         double groupAverage = totalAverage / static_cast<double>(count);
         std::cout << "Итого студентов: " << count
@@ -65,7 +61,7 @@ int main() {
                   << std::defaultfloat
                   << std::endl;
         
-        // Показываем максимальный балл
+        // Вывод максимального среднего балла
         std::cout << "Максимальный средний балл среди найденных студентов: "
                   << std::fixed << std::setprecision(2) << maxAverage
                   << std::defaultfloat
@@ -73,4 +69,52 @@ int main() {
     } else {
         std::cout << "По заданному фильтру студентов не найдено." << std::endl;
     }
+}
+
+void build_filter(
+    const std::string& field,
+    const std::string& op,
+    const bsoncxx::types::bson_value::value& value
+) {
+    // Дополняем фильтр новыми условиями 
+    filter.append(bsoncxx::builder::basic::kvp(
+        field,
+        bsoncxx::builder::basic::make_document(
+            bsoncxx::builder::basic::kvp(op, value)
+        )
+    ));
+}
+
+void clear_filter() {
+    // Очищаем фильтр
+    filter = bsoncxx::builder::basic::document{};
+}
+
+int main() {
+    mongocxx::instance inst{};
+    mongocxx::client client{mongocxx::uri{"mongodb://localhost:27017"}};
+    auto db = client["university"];
+    auto collection = db["students"];
+
+    std::cout << "Студенты: средний балл < 4.0  и возраст < 19" << std::endl;
+    
+    // Очищаем фильтр перед началом
+    clear_filter();
+    
+
+    // возраст < 19
+    build_filter(
+        "Возраст",
+        "$lt",
+        19
+    );
+
+    // средний балл < 4.0
+    build_filter(
+        "Средний_балл",
+        "$lt",
+        4.0
+    );
+    
+    print_collection(collection, filter);
 }

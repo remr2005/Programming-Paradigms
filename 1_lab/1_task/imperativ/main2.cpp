@@ -28,8 +28,8 @@ int main() {
 
     std::cout << "Студенты:" << std::endl;
 
-    std::size_t index = 0;
-    std::size_t count = 0;
+    int index = 0;
+    int count = 0;
     double totalAverage = 0.0;
     double maxAverage = 0.0;
 
@@ -43,7 +43,7 @@ int main() {
         std::string group     = doc["Группа"] ? std::string(doc["Группа"].get_string().value) : "";
         
         // Возраст
-        int32_t age = doc["Возраст"] ? doc["Возраст"].get_int32().value : 0;
+        int age = doc["Возраст"] ? doc["Возраст"].get_int32().value : 0;
         
         // Средний балл
         double avg = doc["Средний_балл"] ? doc["Средний_балл"].get_double().value : 0.0;

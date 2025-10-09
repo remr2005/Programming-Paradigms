@@ -19,8 +19,8 @@ void print_collection(mongocxx::collection& collection,
 
     std::cout << "Студенты:" << std::endl;
 
-    std::size_t index = 0;
-    std::size_t count = 0;
+    int index = 0;
+    int count = 0;
     double totalAverage = 0.0;
     double maxAverage = 0.0;
 
@@ -34,7 +34,7 @@ void print_collection(mongocxx::collection& collection,
         std::string group     = doc["Группа"] ? std::string(doc["Группа"].get_string().value) : "";
         
         // Возраст
-        int32_t age = doc["Возраст"] ? doc["Возраст"].get_int32().value : 0;
+        int age = doc["Возраст"] ? doc["Возраст"].get_int32().value : 0;
         
         // Средний балл
         double avg = doc["Средний_балл"] ? doc["Средний_балл"].get_double().value : 0.0;
@@ -79,15 +79,18 @@ void build_filter(
     const std::string& op,
     const bsoncxx::types::bson_value::value& value
 ) {
+    // Дополняем фильтр новыми условиями (не очищаем!)
+    filter.append(bsoncxx::builder::basic::kvp(
+        field,
+        bsoncxx::builder::basic::make_document(
+            bsoncxx::builder::basic::kvp(op, value)
+        )
+    ));
+}
+
+void clear_filter() {
+    // Очищаем фильтр (если нужно начать заново)
     filter = bsoncxx::builder::basic::document{};
-
-        filter.append(bsoncxx::builder::basic::kvp(
-            field,
-            bsoncxx::builder::basic::make_document(
-                bsoncxx::builder::basic::kvp(op, value)
-            )
-        ));
-
 }
 
 
@@ -97,13 +100,18 @@ int main() {
     auto db = client["university"];
     auto collection = db["students"];
 
-    std :: cout << "Фамилия на А" << std :: endl;
-
+    std::cout << "Студенты: фамилия на 'А'" << std::endl;
+    
+    // Очищаем фильтр перед началом
+    clear_filter();
+    
+    // Добавляем условие: фамилия начинается с "А"
     build_filter(
         "Фамилия",
         "$regex",
-        bsoncxx::types::bson_value::value{bsoncxx::types::b_regex{"^А"}}
+        "^А"
     );
+    
     print_collection(collection, filter);
 
 }

@@ -8,17 +8,18 @@
 #include <iostream>
 #include <iomanip>
 
-
+// Глобальный фильтр для процедурной парадигмы
 bsoncxx::builder::basic::document filter;
 
+// Функция вывода студентов
 void print_collection(mongocxx::collection& collection,
                       const bsoncxx::builder::basic::document& filter) {
     auto cursor = collection.find(filter.view());
     
     std::cout << "Студенты:" << std::endl;
     
-    std::size_t index = 0;
-    std::size_t count = 0;
+    int index = 0;
+    int count = 0;
     double totalAverage = 0.0;
     double maxAverage = 0.0;
     
@@ -26,24 +27,21 @@ void print_collection(mongocxx::collection& collection,
         ++index;
         ++count;
         
-        // Извлекаем поля
+        // Получаем данные студента
         std::string firstName = doc["Имя"] ? std::string(doc["Имя"].get_string().value) : "";
         std::string lastName  = doc["Фамилия"] ? std::string(doc["Фамилия"].get_string().value) : "";
         std::string group     = doc["Группа"] ? std::string(doc["Группа"].get_string().value) : "";
-        
-        // Возраст
-        int32_t age = doc["Возраст"] ? doc["Возраст"].get_int32().value : 0;
-        
-        // Средний балл
+        int age = doc["Возраст"] ? doc["Возраст"].get_int32().value : 0;
         double avg = doc["Средний_балл"] ? doc["Средний_балл"].get_double().value : 0.0;
+        
         totalAverage += avg;
         
-        // Поиск максимального среднего балла
+        // Ищем максимальный балл
         if (avg > maxAverage) {
             maxAverage = avg;
         }
         
-        // Красивый вывод в одну строку на студента
+        // Выводим студента
         std::cout << index << ") "
                   << lastName << " " << firstName
                   << ", возраст: " << age
@@ -61,7 +59,7 @@ void print_collection(mongocxx::collection& collection,
                   << std::defaultfloat
                   << std::endl;
         
-        // Вывод максимального среднего балла
+        // Показываем максимальный балл
         std::cout << "Максимальный средний балл среди найденных студентов: "
                   << std::fixed << std::setprecision(2) << maxAverage
                   << std::defaultfloat
@@ -72,13 +70,12 @@ void print_collection(mongocxx::collection& collection,
 }
 
 
+// Добавляем условие в фильтр
 void build_filter(
     const std::string& field,
     const std::string& op,
     const bsoncxx::types::bson_value::value& value
 ) {
-    filter = bsoncxx::builder::basic::document{};
-    
     filter.append(bsoncxx::builder::basic::kvp(
         field,
         bsoncxx::builder::basic::make_document(
@@ -87,19 +84,28 @@ void build_filter(
     ));
 }
 
+// Очищаем фильтр
+void clear_filter() {
+    filter = bsoncxx::builder::basic::document{};
+}
+
 
 int main() {
+    // Подключаемся к MongoDB
     mongocxx::instance inst{};
     mongocxx::client client{mongocxx::uri{"mongodb://localhost:27017"}};
     auto db = client["university"];
     auto collection = db["students"];
 
-    std :: cout << "Возраст меньше 19" << std :: endl;
-    // Пример: возраст < 19
+    std::cout << "Студенты: возраст < 19" << std::endl;
+    
+    clear_filter();
+    
+    // Фильтр: возраст меньше 19
     build_filter(
         "Возраст",
         "$lt",
-        bsoncxx::types::bson_value::value{bsoncxx::types::b_int64{19}}
+        19
     );
     
     print_collection(collection, filter);

@@ -77,6 +77,7 @@ public:
                 maxAverage = avg;
             }
 
+            // Красивый вывод в одну строку на студента
             std::cout << index << ") "
                       << lastName << " " << firstName
                       << ", возраст: " << age
@@ -109,16 +110,23 @@ int main() {
     try {
         MongoDBHandler handler("mongodb://localhost:27017", "university", "students");
 
-        std::cout << "Студенты: фамилия на 'А'" << std::endl;
+        std::cout << "Студенты: средний балл < 4.0 и возраст < 19" << std::endl;
 
         // Очищаем фильтр перед началом
         handler.clear_filter();
         
-        // фамилия начинается с "А"
+
+        // возраст < 19
         handler.build_filter(
-            "Фамилия",
-            "$regex",
-            "^А"
+            "Возраст",
+            "$lt",
+            19
+        );
+        // средний балл < 4.0
+        handler.build_filter(
+            "Средний_балл",
+            "$lt",
+            4.0
         );
 
         handler.print_collection();
