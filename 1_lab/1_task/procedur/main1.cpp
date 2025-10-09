@@ -33,7 +33,15 @@ void print_collection(mongocxx::collection& collection,
         std::string middleName = doc["Отчество"] ? std::string(doc["Отчество"].get_string().value) : "";
         std::string group     = doc["Группа"] ? std::string(doc["Группа"].get_string().value) : "";
         int age = doc["Возраст"] ? doc["Возраст"].get_int32().value : 0;
-        double avg = doc["Средний_балл"] ? doc["Средний_балл"].get_double().value : 0.0;
+        // Средний балл
+        double avg = 0.0;
+        if (doc["Средний_балл"]) {
+            if (doc["Средний_балл"].type() == bsoncxx::type::k_double) {
+                avg = doc["Средний_балл"].get_double().value;
+            } else {
+                avg = static_cast<double>(doc["Средний_балл"].get_int32().value);
+            }
+        }
         
         totalAverage += avg;
         

@@ -46,7 +46,15 @@ int main() {
         int age = doc["Возраст"] ? doc["Возраст"].get_int32().value : 0;
         
         // Средний балл
-        double avg = doc["Средний_балл"] ? doc["Средний_балл"].get_double().value : 0.0;
+        // Средний балл
+        double avg = 0.0;
+        if (doc["Средний_балл"]) {
+            if (doc["Средний_балл"].type() == bsoncxx::type::k_double) {
+                avg = doc["Средний_балл"].get_double().value;
+            } else {
+                avg = static_cast<double>(doc["Средний_балл"].get_int32().value);
+            }
+        }
         totalAverage += avg;
         
         // Поиск максимального среднего балла
