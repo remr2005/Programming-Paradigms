@@ -14,17 +14,18 @@ bsoncxx::builder::basic::document filter;
 void print_collection(mongocxx::collection& collection,
                       const bsoncxx::builder::basic::document& filter) {
     auto cursor = collection.find(filter.view());
-
+    
     std::cout << "Студенты:" << std::endl;
-
+    
     std::size_t index = 0;
     std::size_t count = 0;
     double totalAverage = 0.0;
-
+    double maxAverage = 0.0;
+    
     for (auto&& doc : cursor) {
         ++index;
         ++count;
-
+        
         // Извлекаем поля
         std::string firstName = doc["Имя"] ? std::string(doc["Имя"].get_string().value) : "";
         std::string lastName  = doc["Фамилия"] ? std::string(doc["Фамилия"].get_string().value) : "";
@@ -36,7 +37,12 @@ void print_collection(mongocxx::collection& collection,
         // Средний балл
         double avg = doc["Средний_балл"] ? doc["Средний_балл"].get_double().value : 0.0;
         totalAverage += avg;
-
+        
+        // Поиск максимального среднего балла
+        if (avg > maxAverage) {
+            maxAverage = avg;
+        }
+        
         // Красивый вывод в одну строку на студента
         std::cout << index << ") "
                   << lastName << " " << firstName
@@ -46,12 +52,18 @@ void print_collection(mongocxx::collection& collection,
                   << std::defaultfloat
                   << std::endl;
     }
-
+    
     if (count > 0) {
         double groupAverage = totalAverage / static_cast<double>(count);
         std::cout << "Итого студентов: " << count
                   << ", средний балл по выборке: "
                   << std::fixed << std::setprecision(2) << groupAverage
+                  << std::defaultfloat
+                  << std::endl;
+        
+        // Вывод максимального среднего балла
+        std::cout << "Максимальный средний балл среди найденных студентов: "
+                  << std::fixed << std::setprecision(2) << maxAverage
                   << std::defaultfloat
                   << std::endl;
     } else {
@@ -65,7 +77,6 @@ void build_filter(
     const std::string& op,
     const bsoncxx::types::bson_value::value& value
 ) {
-    // Очищаем фильтр перед добавлением новых условий
     filter = bsoncxx::builder::basic::document{};
     
     filter.append(bsoncxx::builder::basic::kvp(
