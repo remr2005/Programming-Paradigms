@@ -1,9 +1,11 @@
+// Скрипт инициализации MongoDB для лабораторной работы
+// Создает базу данных university и коллекцию students с тестовыми данными
 
 // Переключение на базу данных university
-use university
+db = db.getSiblingDB('university');
 
 // Создание коллекции students
-db.createCollection('students')
+db.createCollection('students');
 
 // Вставка тестовых данных
 db.students.insertMany([
@@ -71,4 +73,7 @@ db.students.insertMany([
         "Группа": "ИТ-20-1",
         "Средний_балл": 89
     }
-])
+]);
+
+print("База данных 'university' и коллекция 'students' созданы успешно!");
+print("Добавлено " + db.students.countDocuments() + " записей студентов.");

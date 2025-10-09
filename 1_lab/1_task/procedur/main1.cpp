@@ -30,6 +30,7 @@ void print_collection(mongocxx::collection& collection,
         // Получаем данные студента
         std::string firstName = doc["Имя"] ? std::string(doc["Имя"].get_string().value) : "";
         std::string lastName  = doc["Фамилия"] ? std::string(doc["Фамилия"].get_string().value) : "";
+        std::string middleName = doc["Отчество"] ? std::string(doc["Отчество"].get_string().value) : "";
         std::string group     = doc["Группа"] ? std::string(doc["Группа"].get_string().value) : "";
         int age = doc["Возраст"] ? doc["Возраст"].get_int32().value : 0;
         double avg = doc["Средний_балл"] ? doc["Средний_балл"].get_double().value : 0.0;
@@ -43,7 +44,7 @@ void print_collection(mongocxx::collection& collection,
         
         // Выводим студента
         std::cout << index << ") "
-                  << lastName << " " << firstName
+                  << lastName << " " << firstName << " " << middleName
                   << ", возраст: " << age
                   << ", группа: " << group
                   << ", средний балл: " << std::fixed << std::setprecision(2) << avg

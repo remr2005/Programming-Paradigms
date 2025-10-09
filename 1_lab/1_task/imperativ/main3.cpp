@@ -3,6 +3,7 @@
 #include <mongocxx/uri.hpp>
 #include <bsoncxx/json.hpp>
 #include <bsoncxx/builder/basic/document.hpp>
+#include <bsoncxx/types.hpp>
 #include <iostream>
 #include <iomanip>
 
@@ -17,7 +18,7 @@ int main() {
     
     bsoncxx::builder::basic::document filter_builder;
     filter_builder.append(bsoncxx::builder::basic::kvp("Средний_балл", bsoncxx::builder::basic::make_document(
-        bsoncxx::builder::basic::kvp("$lt", 4.0)
+        bsoncxx::builder::basic::kvp("$lt", 70.0)
     )));
     filter_builder.append(bsoncxx::builder::basic::kvp("Возраст", bsoncxx::builder::basic::make_document(
         bsoncxx::builder::basic::kvp("$lt", 19)
@@ -37,12 +38,11 @@ int main() {
         ++index;
         ++count;
 
-        // Извлекаем поля
+        // Получаем данные студента
         std::string firstName = doc["Имя"] ? std::string(doc["Имя"].get_string().value) : "";
         std::string lastName  = doc["Фамилия"] ? std::string(doc["Фамилия"].get_string().value) : "";
+        std::string middleName = doc["Отчество"] ? std::string(doc["Отчество"].get_string().value) : "";
         std::string group     = doc["Группа"] ? std::string(doc["Группа"].get_string().value) : "";
-        
-        // Возраст
         int age = doc["Возраст"] ? doc["Возраст"].get_int32().value : 0;
         
         // Средний балл
@@ -54,9 +54,9 @@ int main() {
             maxAverage = avg;
         }
 
-        // Красивый вывод в одну строку на студента
+        // Выводим студента
         std::cout << index << ") "
-                  << lastName << " " << firstName
+                  << lastName << " " << firstName << " " << middleName
                   << ", возраст: " << age
                   << ", группа: " << group
                   << ", средний балл: " << std::fixed << std::setprecision(2) << avg

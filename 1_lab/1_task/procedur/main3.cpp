@@ -26,15 +26,12 @@ void print_collection(mongocxx::collection& collection,
         ++index;
         ++count;
         
-        // Извлекаем поля
+        // Получаем данные студента
         std::string firstName = doc["Имя"] ? std::string(doc["Имя"].get_string().value) : "";
         std::string lastName  = doc["Фамилия"] ? std::string(doc["Фамилия"].get_string().value) : "";
+        std::string middleName = doc["Отчество"] ? std::string(doc["Отчество"].get_string().value) : "";
         std::string group     = doc["Группа"] ? std::string(doc["Группа"].get_string().value) : "";
-        
-        // Возраст
         int age = doc["Возраст"] ? doc["Возраст"].get_int32().value : 0;
-        
-        // Средний балл
         double avg = doc["Средний_балл"] ? doc["Средний_балл"].get_double().value : 0.0;
         totalAverage += avg;
         
@@ -43,9 +40,9 @@ void print_collection(mongocxx::collection& collection,
             maxAverage = avg;
         }
         
-        // Красивый вывод в одну строку на студента
+        // Выводим студента
         std::cout << index << ") "
-                  << lastName << " " << firstName
+                  << lastName << " " << firstName << " " << middleName
                   << ", возраст: " << age
                   << ", группа: " << group
                   << ", средний балл: " << std::fixed << std::setprecision(2) << avg
@@ -96,7 +93,7 @@ int main() {
     auto db = client["university"];
     auto collection = db["students"];
 
-    std::cout << "Студенты: средний балл < 4.0  и возраст < 19" << std::endl;
+    std::cout << "Студенты: средний балл < 70 и возраст < 19" << std::endl;
     
     // Очищаем фильтр перед началом
     clear_filter();
@@ -109,11 +106,11 @@ int main() {
         19
     );
 
-    // средний балл < 4.0
+    // средний балл < 70
     build_filter(
         "Средний_балл",
         "$lt",
-        4.0
+        70.0
     );
     
     print_collection(collection, filter);
