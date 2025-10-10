@@ -26,21 +26,12 @@ int main() {
 
     std::cout << "Студенты:" << std::endl;
 
-    int index = 0;
-    int count = 0;
+    double count = 0;
     double totalAverage = 0.0;
     double maxAverage = 0.0;
 
-    for (auto&& doc : cursor) {
-        ++index;
+    for (auto& doc : cursor) {
         ++count;
-
-        // Получаем данные студента
-        std::string firstName = doc["Имя"] ? std::string(doc["Имя"].get_string().value) : "";
-        std::string lastName  = doc["Фамилия"] ? std::string(doc["Фамилия"].get_string().value) : "";
-        std::string middleName = doc["Отчество"] ? std::string(doc["Отчество"].get_string().value) : "";
-        std::string group     = doc["Группа"] ? std::string(doc["Группа"].get_string().value) : "";
-        int age = doc["Возраст"] ? doc["Возраст"].get_int32().value : 0;
         // Средний балл
         double avg = 0.0;
         if (doc["Средний_балл"]) {
@@ -57,19 +48,10 @@ int main() {
         if (avg > maxAverage) {
             maxAverage = avg;
         }
-
-        // Выводим студента
-        std::cout << index << ") "
-                  << lastName << " " << firstName << " " << middleName
-                  << ", возраст: " << age
-                  << ", группа: " << group
-                  << ", средний балл: " << std::fixed << std::setprecision(2) << avg
-                  << std::defaultfloat
-                  << std::endl;
     }
 
     if (count > 0) {
-        double groupAverage = totalAverage / static_cast<double>(count);
+        double groupAverage = totalAverage / count;
         std::cout << "Итого студентов: " << count
                   << ", средний балл по выборке: "
                   << std::fixed << std::setprecision(2) << groupAverage

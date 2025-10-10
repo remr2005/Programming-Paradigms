@@ -13,27 +13,49 @@
 bsoncxx::builder::basic::document filter;
 
 
-void print_collection(mongocxx::collection& collection,
+// Функция вывода студентов
+void print_average(mongocxx::collection& collection,
                       const bsoncxx::builder::basic::document& filter) {
     auto cursor = collection.find(filter.view());
-
-    std::cout << "Студенты:" << std::endl;
-
-    int index = 0;
-    int count = 0;
+    double count = 0;
     double totalAverage = 0.0;
+    
+    for (auto& doc : cursor) {
+        count+=1;
+        // Средний балл
+        double avg = 0.0;
+        if (doc["Средний_балл"]) {
+            if (doc["Средний_балл"].type() == bsoncxx::type::k_double) {
+                avg = doc["Средний_балл"].get_double().value;
+            } else {
+                avg = static_cast<double>(doc["Средний_балл"].get_int32().value);
+            }
+        }    
+        totalAverage += avg;
+    }
+    
+    if (count > 0) {
+        double groupAverage = totalAverage / count;
+        std::cout << "Итого студентов: " << count
+                  << ", средний балл по выборке: "
+                  << std::fixed << std::setprecision(2) << groupAverage
+                  << std::defaultfloat
+                  << std::endl;
+    } else {
+        std::cout << "По заданному фильтру студентов не найдено." << std::endl;
+    }
+}
+
+
+void print_max(mongocxx::collection& collection,
+                      const bsoncxx::builder::basic::document& filter) {
+    auto cursor = collection.find(filter.view());
+    
+    double count = 0;
     double maxAverage = 0.0;
-
-    for (auto&& doc : cursor) {
-        ++index;
-        ++count;
-
-        // Получаем данные студента
-        std::string firstName = doc["Имя"] ? std::string(doc["Имя"].get_string().value) : "";
-        std::string lastName  = doc["Фамилия"] ? std::string(doc["Фамилия"].get_string().value) : "";
-        std::string middleName = doc["Отчество"] ? std::string(doc["Отчество"].get_string().value) : "";
-        std::string group     = doc["Группа"] ? std::string(doc["Группа"].get_string().value) : "";
-        int age = doc["Возраст"] ? doc["Возраст"].get_int32().value : 0;
+    
+    for (auto& doc : cursor) {
+        count +=1;
         // Средний балл
         double avg = 0.0;
         if (doc["Средний_балл"]) {
@@ -43,32 +65,15 @@ void print_collection(mongocxx::collection& collection,
                 avg = static_cast<double>(doc["Средний_балл"].get_int32().value);
             }
         }
-        totalAverage += avg;
         
-        // Поиск максимального среднего балла
+        // Ищем максимальный балл
         if (avg > maxAverage) {
             maxAverage = avg;
         }
-
-        // Выводим студента
-        std::cout << index << ") "
-                  << lastName << " " << firstName << " " << middleName
-                  << ", возраст: " << age
-                  << ", группа: " << group
-                  << ", средний балл: " << std::fixed << std::setprecision(2) << avg
-                  << std::defaultfloat
-                  << std::endl;
     }
-
-    if (count > 0) {
-        double groupAverage = totalAverage / static_cast<double>(count);
-        std::cout << "Итого студентов: " << count
-                  << ", средний балл по выборке: "
-                  << std::fixed << std::setprecision(2) << groupAverage
-                  << std::defaultfloat
-                  << std::endl;
-        
-        // Вывод максимального среднего балла
+    
+    if (count > 0) {        
+        // Показываем максимальный балл
         std::cout << "Максимальный средний балл среди найденных студентов: "
                   << std::fixed << std::setprecision(2) << maxAverage
                   << std::defaultfloat
@@ -77,7 +82,6 @@ void print_collection(mongocxx::collection& collection,
         std::cout << "По заданному фильтру студентов не найдено." << std::endl;
     }
 }
-
 
 void build_filter(
     const std::string& field,
@@ -109,14 +113,30 @@ int main() {
     
     // Очищаем фильтр перед началом
     clear_filter();
-    
-    // Добавляем условие: фамилия начинается с "А"
+        
+    // фамилия начинается с "А"
     build_filter(
-        "Фамилия",
-        "$regex",
-        "^А"
+            "Фамилия",
+            "$regex",
+            "^А"
+        );
+
+    print_average(collection, filter);
+    clear_filter();
+        
+    std::cout << "Студенты: средний балл < 70 и возраст < 19" << std::endl;
+    // возраст < 19
+    build_filter(
+        "Возраст",
+        "$lt",
+        19
     );
-    
-    print_collection(collection, filter);
+    // средний балл < 70
+    build_filter(
+            "Средний_балл",
+            "$lt",
+            70.0
+        );
+    print_max(collection, filter);
 
 }

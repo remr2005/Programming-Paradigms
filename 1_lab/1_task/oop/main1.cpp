@@ -52,7 +52,7 @@ public:
         double count = 0;
         double totalAverage = 0.0;
 
-        for (auto&& doc : cursor) {
+        for (auto& doc : cursor) {
             count+=1;
             double avg = 0.0;
             if (doc["Средний_балл"]) {
@@ -84,7 +84,7 @@ public:
 
         double maxAverage = 0.0;
         int count = 0;
-        for (auto&& doc : cursor) {
+        for (auto& doc : cursor) {
             // Поиск максимального среднего балла
             ++count;
             double avg = 0.0;
