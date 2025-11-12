@@ -16,6 +16,11 @@ public:
     
     virtual Eigen::VectorXd derivative(const Eigen::VectorXd& x) = 0;
     
+    virtual Eigen::MatrixXd jacobian(const Eigen::VectorXd& x) {
+        Eigen::VectorXd diag = derivative(x);
+        return diag.asDiagonal();
+    }
+    
     virtual ~ActivationFunction() = default;
     
     bool getSupportsHadamardDerivative() const {
@@ -65,6 +70,12 @@ public:
     Eigen::VectorXd derivative(const Eigen::VectorXd& x) override {
         Eigen::VectorXd s = activate(x);
         return s.array() * (1.0 - s.array());
+    }
+    
+    Eigen::MatrixXd jacobian(const Eigen::VectorXd& x) override {
+        Eigen::VectorXd s = activate(x);
+        Eigen::MatrixXd diag_s = s.asDiagonal();
+        return diag_s - s * s.transpose();
     }
 };
 
@@ -118,13 +129,27 @@ public:
     }
     
     Eigen::VectorXd backward(const Eigen::VectorXd& gradient, double learning_rate = 0.01) {
-        Eigen::VectorXd activation_grad = activation.derivative(last_z);
-        Eigen::VectorXd delta = gradient.array() * activation_grad.array();
+        Eigen::VectorXd delta;
         
+        if (activation.getSupportsHadamardDerivative()) {
+            // Для hadamard-совместимых функций используем derivative() и hadamard
+            Eigen::VectorXd activation_grad = activation.derivative(last_z);
+            delta = gradient.array() * activation_grad.array();  // Hadamard product
+        } else {
+            // Для softmax используем jacobian() и матричное умножение
+            Eigen::MatrixXd J = activation.jacobian(last_z);
+            delta = J * gradient;  // Матричное умножение
+        }
+        
+        // Сохраняем старые веса для вычисления градиента предыдущего слоя
+        Eigen::MatrixXd old_weights = weights;
+        
+        // Обновляем веса и смещения
         weights -= learning_rate * delta * last_input.transpose();
         biases -= learning_rate * delta;
         
-        return weights.transpose() * delta; 
+        // Возвращаем градиент для предыдущего слоя (используем старые веса)
+        return old_weights.transpose() * delta; 
     }
 };
 
