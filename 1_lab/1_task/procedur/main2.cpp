@@ -88,7 +88,6 @@ void build_filter(
     const std::string& op,
     const bsoncxx::types::bson_value::value& value
 ) {
-    // Дополняем фильтр новыми условиями (не очищаем!)
     filter.append(bsoncxx::builder::basic::kvp(
         field,
         bsoncxx::builder::basic::make_document(
@@ -98,7 +97,7 @@ void build_filter(
 }
 
 void clear_filter() {
-    // Очищаем фильтр (если нужно начать заново)
+    // Очищаем фильтр
     filter = bsoncxx::builder::basic::document{};
 }
 

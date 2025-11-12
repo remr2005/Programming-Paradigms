@@ -86,7 +86,7 @@ void print_max(mongocxx::collection& collection,
     }
 }
 
-// Добавляем условие в фильтр
+// Добавить условие в фильтр
 void build_filter(
     const std::string& field,
     const std::string& op,
@@ -100,7 +100,7 @@ void build_filter(
     ));
 }
 
-// Очищаем фильтр
+// Очистить фильтр
 void clear_filter() {
     filter = bsoncxx::builder::basic::document{};
 }
@@ -115,7 +115,7 @@ int main() {
 
    std::cout << "Студенты: возраст < 19" << std::endl;
 
-    // Очищаем фильтр перед началом
+    // Очистить фильтр
     clear_filter();
         
     // возраст < 19
