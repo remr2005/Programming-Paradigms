@@ -1,25 +1,23 @@
 #include <iostream>
 #include <cmath>
 #include <algorithm>
+#include <random>
 #include <Eigen/Dense>
 
 class ActivationFunction {
 protected:
-    bool supports_hadamard_derivative;  // Поле вместо функции
+    bool supports_hadamard_derivative;
     
 public:
-    // Конструктор для инициализации поля
     ActivationFunction(bool supports_hadamard = true) 
         : supports_hadamard_derivative(supports_hadamard) {}
     
-    // Активация вектора-столбца
     virtual Eigen::VectorXd activate(const Eigen::VectorXd& x) = 0;
     
     virtual Eigen::VectorXd derivative(const Eigen::VectorXd& x) = 0;
     
     virtual ~ActivationFunction() = default;
     
-    // Геттер для поля
     bool getSupportsHadamardDerivative() const {
         return supports_hadamard_derivative;
     }
@@ -55,10 +53,9 @@ public:
 
 class Softmax : public ActivationFunction {
 public:
-    Softmax() : ActivationFunction(false) {}  // Инициализируем поле как false
+    Softmax() : ActivationFunction(false) {}
     
-    Eigen::VectorXd activate(const Eigen::VectorXd& x) override {
-        // Вычитаем максимум для численной стабильности
+        Eigen::VectorXd activate(const Eigen::VectorXd& x) override {
         double max_val = x.maxCoeff();
         Eigen::VectorXd exp_x = (x.array() - max_val).exp();
         double sum = exp_x.sum();
@@ -68,6 +65,66 @@ public:
     Eigen::VectorXd derivative(const Eigen::VectorXd& x) override {
         Eigen::VectorXd s = activate(x);
         return s.array() * (1.0 - s.array());
+    }
+};
+
+class LossFunction {
+public:
+    virtual double loss(const Eigen::VectorXd& predicted, const Eigen::VectorXd& target) = 0;
+
+    virtual Eigen::VectorXd derivative(const Eigen::VectorXd& predicted, const Eigen::VectorXd& target) = 0;
+    
+    virtual ~LossFunction() = default;
+};
+
+// Mean Squared Error (MSE)
+class MSE : public LossFunction {
+public:
+    double loss(const Eigen::VectorXd& predicted, const Eigen::VectorXd& target) override {
+        Eigen::VectorXd diff = predicted - target;
+        return diff.squaredNorm() / predicted.size();
+    }
+    
+    Eigen::VectorXd derivative(const Eigen::VectorXd& predicted, const Eigen::VectorXd& target) override {
+        return 2.0 * (predicted - target) / predicted.size();
+    }
+};
+
+class Layer {
+protected:
+    Eigen::MatrixXd weights;
+    Eigen::VectorXd biases;
+    Eigen::VectorXd last_z;  // Сохраняем z для backward
+    Eigen::VectorXd last_input;  // Сохраняем input для backward
+    
+public:
+    int input_size;
+    int output_size;
+    ActivationFunction& activation;
+    
+    Layer(int input_size, int output_size, ActivationFunction& activation)
+        : input_size(input_size), output_size(output_size), activation(activation),
+          weights(output_size, input_size), biases(output_size) {
+        // Xavier initialization
+        double limit = std::sqrt(6.0 / (input_size + output_size));
+        weights = Eigen::MatrixXd::Random(output_size, input_size) * limit;        
+        biases.setZero();
+    }
+    
+    Eigen::VectorXd forward(const Eigen::VectorXd& input) {
+        last_input = input; 
+        last_z = weights * input + biases; 
+        return activation.activate(last_z);
+    }
+    
+    Eigen::VectorXd backward(const Eigen::VectorXd& gradient, double learning_rate = 0.01) {
+        Eigen::VectorXd activation_grad = activation.derivative(last_z);
+        Eigen::VectorXd delta = gradient.array() * activation_grad.array();
+        
+        weights -= learning_rate * delta * last_input.transpose();
+        biases -= learning_rate * delta;
+        
+        return weights.transpose() * delta; 
     }
 };
 
