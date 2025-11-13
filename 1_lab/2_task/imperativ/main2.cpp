@@ -380,10 +380,10 @@ int main() {
             // Forward pass
             Eigen::VectorXd x = digits[sample_idx];
             
-            // Слой 1 (Sigmoid)
+            // Слой 1 (ReLU)
             last_input1 = x;
             last_z1 = weights1 * x + biases1;
-            Eigen::VectorXd layer1_output = (1.0 + (-last_z1).array().exp()).inverse();
+            Eigen::VectorXd layer1_output = last_z1.cwiseMax(0.0);
             
             // Слой 2 (Softmax)
             last_input2 = layer1_output;
@@ -410,9 +410,9 @@ int main() {
             biases2 -= learning_rate * delta2;
             Eigen::VectorXd grad1 = old_weights2.transpose() * delta2;
             
-            // Backward для слоя 1 (Sigmoid)
+            // Backward для слоя 1 (ReLU)
             Eigen::VectorXd s1 = layer1_output;
-            Eigen::VectorXd activation_grad1 = s1.array() * (1.0 - s1.array());
+            Eigen::VectorXd activation_grad1 = (s1.array() > 0.0).cast<double>();
             Eigen::VectorXd delta1 = grad1.array() * activation_grad1.array();
             Eigen::MatrixXd old_weights1 = weights1;
             weights1 -= learning_rate * delta1 * last_input1.transpose();
@@ -431,7 +431,7 @@ int main() {
         Eigen::VectorXd x = digits[i];
         
         Eigen::VectorXd z1 = weights1 * x + biases1;
-        Eigen::VectorXd layer1_out = (1.0 + (-z1).array().exp()).inverse();
+        Eigen::VectorXd layer1_out = z1.cwiseMax(0.0);
         
         Eigen::VectorXd z2 = weights2 * layer1_out + biases2;
         double max_val = z2.maxCoeff();

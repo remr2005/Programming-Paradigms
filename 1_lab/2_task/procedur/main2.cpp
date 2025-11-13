@@ -444,22 +444,21 @@ void create_dataset(Dataset* dataset) {
 int main() {
     Dataset dataset;
     create_dataset(&dataset);
-
     
     // Создаём нейронную сеть
     NeuralNetwork nn;
     network_init(&nn, 0);  // MSE loss
     
-    ActivationFunction sigmoid_act;
-    sigmoid_act.type = 0;
-    sigmoid_act.supports_hadamard_derivative = true;
+    ActivationFunction relu_act;
+    relu_act.type = 1;
+    relu_act.supports_hadamard_derivative = true;
     
     ActivationFunction softmax_act;
     softmax_act.type = 2;
     softmax_act.supports_hadamard_derivative = false;
     
     Layer layer1;
-    layer_init(&layer1, 400, 128, &sigmoid_act);
+    layer_init(&layer1, 400, 128, &relu_act);
     network_add_layer(&nn, &layer1);
     
     Layer layer2;
@@ -504,3 +503,4 @@ int main() {
     
     return 0;
 }
+
