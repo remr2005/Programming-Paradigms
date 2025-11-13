@@ -1,279 +1,510 @@
-#include <mongocxx/client.hpp>
-#include <mongocxx/instance.hpp>
-#include <mongocxx/uri.hpp>
-#include <mongocxx/collection.hpp>
-#include <bsoncxx/json.hpp>
-#include <bsoncxx/builder/basic/document.hpp>
-#include <bsoncxx/types/bson_value/value.hpp>
 #include <iostream>
-#include <iomanip>
+#include <cmath>
+#include <algorithm>
+#include <random>
 #include <vector>
 #include <string>
-#include <map>
-#include <algorithm>
+#include <Eigen/Dense>
 
-// Глобальные переменные
-mongocxx::collection global_collection;
-bsoncxx::builder::basic::document global_filter;
-
-struct StudentStats {
-    std::string name;
-    double average_score;
-    int age;
-    std::string surname;
+// Структуры данных
+struct ActivationFunction {
+    bool supports_hadamard_derivative;
+    int type;  // 0 = Sigmoid, 1 = ReLU, 2 = Softmax
 };
 
-struct GroupStats {
-    int count;
-    double total_average;
-    double max_score;
-    double min_score;
-    std::vector<StudentStats> students;
+struct Layer {
+    Eigen::MatrixXd weights;
+    Eigen::VectorXd biases;
+    Eigen::VectorXd last_z;
+    Eigen::VectorXd last_input;
+    int input_size;
+    int output_size;
+    ActivationFunction* activation;
 };
 
-void init_mongodb_connection() {
-    mongocxx::instance instance{};
-    mongocxx::client client{mongocxx::uri{"mongodb://localhost:27017"}};
-    auto db = client["university"];
-    global_collection = db["students"];
+struct NeuralNetwork {
+    std::vector<Layer*> layers;
+    int loss_type;  // 0 = MSE
+};
+
+struct Dataset {
+    std::vector<Eigen::VectorXd> digits;
+    std::vector<Eigen::VectorXd> targets;
+};
+
+// Процедуры для функций активации
+void sigmoid_activate(const Eigen::VectorXd& x, Eigen::VectorXd* result) {
+    *result = (1.0 + (-x).array().exp()).inverse();
 }
 
-void clear_global_filter() {
-    global_filter = bsoncxx::builder::basic::document{};
+void sigmoid_derivative(const Eigen::VectorXd& x, Eigen::VectorXd* result) {
+    Eigen::VectorXd s;
+    sigmoid_activate(x, &s);
+    *result = s.array() * (1.0 - s.array());
 }
 
-void add_filter_condition(const std::string& field, const std::string& op, const bsoncxx::types::bson_value::value& value) {
-    global_filter.append(bsoncxx::builder::basic::kvp(
-        field,
-        bsoncxx::builder::basic::make_document(
-            bsoncxx::builder::basic::kvp(op, value)
-        )
-    ));
+void relu_activate(const Eigen::VectorXd& x, Eigen::VectorXd* result) {
+    *result = x.cwiseMax(0.0);
 }
 
-void add_regex_filter(const std::string& field, const std::string& pattern) {
-    global_filter.append(bsoncxx::builder::basic::kvp(
-        field,
-        bsoncxx::builder::basic::make_document(
-            bsoncxx::builder::basic::kvp("$regex", pattern)
-        )
-    ));
+void relu_derivative(const Eigen::VectorXd& x, Eigen::VectorXd* result) {
+    Eigen::VectorXd activated;
+    relu_activate(x, &activated);
+    *result = (activated.array() > 0.0).cast<double>();
 }
 
-void add_range_filter(const std::string& field, double min_val, double max_val) {
-    global_filter.append(bsoncxx::builder::basic::kvp(
-        field,
-        bsoncxx::builder::basic::make_document(
-            bsoncxx::builder::basic::kvp("$gte", min_val),
-            bsoncxx::builder::basic::kvp("$lte", max_val)
-        )
-    ));
+void softmax_activate(const Eigen::VectorXd& x, Eigen::VectorXd* result) {
+    double max_val = x.maxCoeff();
+    Eigen::VectorXd exp_x = (x.array() - max_val).exp();
+    double sum = exp_x.sum();
+    *result = exp_x / sum;
 }
 
-GroupStats get_statistics_by_filter() {
-    GroupStats stats;
-    stats.count = 0;
-    stats.total_average = 0.0;
-    stats.max_score = 0.0;
-    stats.min_score = 100.0;
+void softmax_derivative(const Eigen::VectorXd& x, Eigen::VectorXd* result) {
+    Eigen::VectorXd s;
+    softmax_activate(x, &s);
+    *result = s.array() * (1.0 - s.array());
+}
+
+void softmax_jacobian(const Eigen::VectorXd& x, Eigen::MatrixXd* result) {
+    Eigen::VectorXd s;
+    softmax_activate(x, &s);
+    Eigen::MatrixXd diag_s = Eigen::MatrixXd(s.asDiagonal());
+    *result = diag_s - s * s.transpose();
+}
+
+void activation_activate(ActivationFunction* act, const Eigen::VectorXd& x, Eigen::VectorXd* result) {
+    if (act->type == 0) {
+        sigmoid_activate(x, result);
+    } else if (act->type == 1) {
+        relu_activate(x, result);
+    } else if (act->type == 2) {
+        softmax_activate(x, result);
+    }
+}
+
+void activation_derivative(ActivationFunction* act, const Eigen::VectorXd& x, Eigen::VectorXd* result) {
+    if (act->type == 0) {
+        sigmoid_derivative(x, result);
+    } else if (act->type == 1) {
+        relu_derivative(x, result);
+    } else if (act->type == 2) {
+        softmax_derivative(x, result);
+    }
+}
+
+void activation_jacobian(ActivationFunction* act, const Eigen::VectorXd& x, Eigen::MatrixXd* result) {
+    if (act->type == 2) {
+        softmax_jacobian(x, result);
+    } else {
+        Eigen::VectorXd diag;
+        activation_derivative(act, x, &diag);
+        *result = diag.asDiagonal();
+    }
+}
+
+// Процедуры для функции потерь
+void mse_loss(const Eigen::VectorXd& predicted, const Eigen::VectorXd& target, double* loss_val) {
+    Eigen::VectorXd diff = predicted - target;
+    *loss_val = diff.squaredNorm() / predicted.size();
+}
+
+void mse_derivative(const Eigen::VectorXd& predicted, const Eigen::VectorXd& target, Eigen::VectorXd* gradient) {
+    *gradient = 2.0 * (predicted - target) / predicted.size();
+}
+
+// Процедуры для слоя
+void layer_init(Layer* layer, int input_size, int output_size, ActivationFunction* activation) {
+    layer->input_size = input_size;
+    layer->output_size = output_size;
+    layer->activation = activation;
+    layer->weights = Eigen::MatrixXd(output_size, input_size);
+    layer->biases = Eigen::VectorXd(output_size);
     
-    auto cursor = global_collection.find(global_filter.view());
+    // Xavier initialization
+    double limit = std::sqrt(6.0 / (input_size + output_size));
+    layer->weights = Eigen::MatrixXd::Random(output_size, input_size) * limit;
+    layer->biases.setZero();
+}
+
+void layer_forward(Layer* layer, const Eigen::VectorXd& input, Eigen::VectorXd* output) {
+    layer->last_input = input;
+    layer->last_z = layer->weights * input + layer->biases;
+    activation_activate(layer->activation, layer->last_z, output);
+}
+
+void layer_backward(Layer* layer, const Eigen::VectorXd& gradient, double learning_rate, Eigen::VectorXd* prev_gradient) {
+    Eigen::VectorXd delta;
     
-    for (auto& doc : cursor) {
-        stats.count++;
-        
-        StudentStats student;
-        student.name = "";
-        student.surname = "";
-        student.age = 0;
-        student.average_score = 0.0;
-        
-        if (doc["Имя"]) {
-            student.name = doc["Имя"].get_string().value.to_string();
-        }
-        if (doc["Фамилия"]) {
-            student.surname = doc["Фамилия"].get_string().value.to_string();
-        }
-        if (doc["Возраст"]) {
-            student.age = doc["Возраст"].get_int32().value;
-        }
-        if (doc["Средний_балл"]) {
-            if (doc["Средний_балл"].type() == bsoncxx::type::k_double) {
-                student.average_score = doc["Средний_балл"].get_double().value;
+    if (layer->activation->supports_hadamard_derivative) {
+        Eigen::VectorXd activation_grad;
+        activation_derivative(layer->activation, layer->last_z, &activation_grad);
+        delta = gradient.array() * activation_grad.array();
+    } else {
+        Eigen::MatrixXd J;
+        activation_jacobian(layer->activation, layer->last_z, &J);
+        delta = J * gradient;
+    }
+    
+    Eigen::MatrixXd old_weights = layer->weights;
+    
+    layer->weights -= learning_rate * delta * layer->last_input.transpose();
+    layer->biases -= learning_rate * delta;
+    
+    *prev_gradient = old_weights.transpose() * delta;
+}
+
+// Процедуры для нейронной сети
+void network_init(NeuralNetwork* nn, int loss_type) {
+    nn->loss_type = loss_type;
+    nn->layers.clear();
+}
+
+void network_add_layer(NeuralNetwork* nn, Layer* layer) {
+    nn->layers.push_back(layer);
+}
+
+void network_forward(NeuralNetwork* nn, const Eigen::VectorXd& input, Eigen::VectorXd* output) {
+    Eigen::VectorXd x = input;
+    for (size_t i = 0; i < nn->layers.size(); ++i) {
+        Eigen::VectorXd temp;
+        layer_forward(nn->layers[i], x, &temp);
+        x = temp;
+    }
+    *output = x;
+}
+
+void network_train(NeuralNetwork* nn, const Eigen::VectorXd& input, const Eigen::VectorXd& target, double learning_rate, double* loss_val) {
+    Eigen::VectorXd output;
+    network_forward(nn, input, &output);
+    
+    if (nn->loss_type == 0) {
+        mse_loss(output, target, loss_val);
+    }
+    
+    Eigen::VectorXd gradient;
+    if (nn->loss_type == 0) {
+        mse_derivative(output, target, &gradient);
+    }
+    
+    for (int i = nn->layers.size() - 1; i >= 0; --i) {
+        Eigen::VectorXd prev_grad;
+        layer_backward(nn->layers[i], gradient, learning_rate, &prev_grad);
+        gradient = prev_grad;
+    }
+}
+
+void network_predict(NeuralNetwork* nn, const Eigen::VectorXd& input, Eigen::VectorXd* output) {
+    network_forward(nn, input, output);
+}
+
+// Процедуры для датасета
+void display_digit(const Eigen::VectorXd& digit, int width, int height) {
+    for (int i = 0; i < height; ++i) {
+        for (int j = 0; j < width; ++j) {
+            int idx = i * width + j;
+            if (idx < digit.size() && digit(idx) > 0.5) {
+                std::cout << "██";
             } else {
-                student.average_score = static_cast<double>(doc["Средний_балл"].get_int32().value);
+                std::cout << "  ";
             }
         }
-        
-        stats.students.push_back(student);
-        stats.total_average += student.average_score;
-        
-        if (student.average_score > stats.max_score) {
-            stats.max_score = student.average_score;
-        }
-        if (student.average_score < stats.min_score) {
-            stats.min_score = student.average_score;
-        }
-    }
-    
-    if (stats.count > 0) {
-        stats.total_average /= stats.count;
-    }
-    
-    return stats;
-}
-
-void print_statistics(const GroupStats& stats, const std::string& description) {
-    std::cout << description << std::endl;
-    std::cout << "   Количество студентов: " << stats.count << std::endl;
-    
-    if (stats.count > 0) {
-        std::cout << "   Средний балл: " << std::fixed << std::setprecision(2) << stats.total_average << std::endl;
-        std::cout << "   Максимальный балл: " << std::fixed << std::setprecision(2) << stats.max_score << std::endl;
-        std::cout << "   Минимальный балл: " << std::fixed << std::setprecision(2) << stats.min_score << std::endl;
-        std::cout << "   Разброс баллов: " << std::fixed << std::setprecision(2) << (stats.max_score - stats.min_score) << std::endl;
-    } else {
-        std::cout << "   Студентов не найдено." << std::endl;
+        std::cout << std::endl;
     }
     std::cout << std::endl;
 }
 
-// Функция анализа по возрастным группам
-void analyze_age_groups() {
-    std::cout << "=== АНАЛИЗ ПО ВОЗРАСТНЫМ ГРУППАМ ===" << std::endl;
+void create_digit_from_pattern(const std::vector<std::string>& pattern, int size, Eigen::VectorXd* digit) {
+    *digit = Eigen::VectorXd(size * size);
+    digit->setZero();
     
-    std::vector<std::pair<int, int>> age_groups = {{17, 18}, {19, 20}, {21, 22}, {23, 25}, {26, 30}};
+    int offset_y = (size - pattern.size()) / 2;
+    int offset_x = (size - pattern[0].length()) / 2;
     
-    for (auto& group : age_groups) {
-        clear_global_filter();
-        add_range_filter("Возраст", group.first, group.second);
-        
-        GroupStats stats = get_statistics_by_filter();
-        std::string description = "Возрастная группа " + std::to_string(group.first) + "-" + std::to_string(group.second) + " лет:";
-        print_statistics(stats, description);
+    for (size_t i = 0; i < pattern.size(); ++i) {
+        for (size_t j = 0; j < pattern[i].length(); ++j) {
+            int y = offset_y + i;
+            int x = offset_x + j;
+            if (y >= 0 && y < size && x >= 0 && x < size) {
+                if (pattern[i][j] == '1' || pattern[i][j] == '#') {
+                    (*digit)(y * size + x) = 1.0;
+                }
+            }
+        }
     }
 }
 
-// Функция анализа по диапазонам баллов
-void analyze_score_ranges() {
-    std::cout << "=== РАСПРЕДЕЛЕНИЕ ПО ДИАПАЗОНАМ БАЛЛОВ ===" << std::endl;
+void create_dataset(Dataset* dataset) {
+    const int DIGIT_SIZE = 20;
     
-    std::vector<std::pair<double, double>> score_ranges = {
-        {0, 50}, {50, 60}, {60, 70}, {70, 80}, {80, 90}, {90, 100}
+    // Цифра 0
+    std::vector<std::string> pattern0 = {
+        " 1111111111 ",
+        "11        11",
+        "11        11",
+        "11        11",
+        "11        11",
+        "11        11",
+        "11        11",
+        "11        11",
+        "11        11",
+        "11        11",
+        " 1111111111 "
     };
+    Eigen::VectorXd digit0;
+    create_digit_from_pattern(pattern0, DIGIT_SIZE, &digit0);
+    Eigen::VectorXd target0(10);
+    target0 << 1, 0, 0, 0, 0, 0, 0, 0, 0, 0;
+    dataset->digits.push_back(digit0);
+    dataset->targets.push_back(target0);
     
-    for (auto& range : score_ranges) {
-        clear_global_filter();
-        add_range_filter("Средний_балл", range.first, range.second);
-        
-        GroupStats stats = get_statistics_by_filter();
-        std::string description = "Диапазон баллов " + std::to_string((int)range.first) + "-" + std::to_string((int)range.second) + ":";
-        print_statistics(stats, description);
-    }
-}
-
-// Функция анализа по фамилиям
-void analyze_by_surnames() {
-    std::cout << "=== АНАЛИЗ ПО ФАМИЛИЯМ ===" << std::endl;
+    // Цифра 1
+    std::vector<std::string> pattern1 = {
+        "     11     ",
+        "    111     ",
+        "     11     ",
+        "     11     ",
+        "     11     ",
+        "     11     ",
+        "     11     ",
+        "     11     ",
+        "     11     ",
+        "     11     ",
+        "   111111   "
+    };
+    Eigen::VectorXd digit1;
+    create_digit_from_pattern(pattern1, DIGIT_SIZE, &digit1);
+    Eigen::VectorXd target1(10);
+    target1 << 0, 1, 0, 0, 0, 0, 0, 0, 0, 0;
+    dataset->digits.push_back(digit1);
+    dataset->targets.push_back(target1);
     
-    std::vector<char> letters = {'А', 'Б', 'В', 'Г', 'Д', 'Е', 'Ж', 'З'};
+    // Цифра 2
+    std::vector<std::string> pattern2 = {
+        " 1111111111 ",
+        "11        11",
+        "         11 ",
+        "        11  ",
+        "       11   ",
+        "      11    ",
+        "     11     ",
+        "    11      ",
+        "   11       ",
+        "  11        ",
+        " 11111111111"
+    };
+    Eigen::VectorXd digit2;
+    create_digit_from_pattern(pattern2, DIGIT_SIZE, &digit2);
+    Eigen::VectorXd target2(10);
+    target2 << 0, 0, 1, 0, 0, 0, 0, 0, 0, 0;
+    dataset->digits.push_back(digit2);
+    dataset->targets.push_back(target2);
     
-    for (char letter : letters) {
-        clear_global_filter();
-        std::string pattern = "^" + std::string(1, letter);
-        add_regex_filter("Фамилия", pattern);
-        
-        GroupStats stats = get_statistics_by_filter();
-        std::string description = "Фамилии на букву '" + std::string(1, letter) + "':";
-        print_statistics(stats, description);
-    }
-}
-
-// Функция поиска топ студентов
-void find_top_students(int count, bool best = true) {
-    clear_global_filter();
-    GroupStats all_stats = get_statistics_by_filter();
+    // Цифра 3
+    std::vector<std::string> pattern3 = {
+        " 1111111111 ",
+        "11        11",
+        "         11 ",
+        "         11 ",
+        " 1111111111 ",
+        "         11 ",
+        "         11 ",
+        "         11 ",
+        "11        11",
+        " 1111111111 "
+    };
+    Eigen::VectorXd digit3;
+    create_digit_from_pattern(pattern3, DIGIT_SIZE, &digit3);
+    Eigen::VectorXd target3(10);
+    target3 << 0, 0, 0, 1, 0, 0, 0, 0, 0, 0;
+    dataset->digits.push_back(digit3);
+    dataset->targets.push_back(target3);
     
-    if (all_stats.students.empty()) return;
+    // Цифра 4
+    std::vector<std::string> pattern4 = {
+        "11        11",
+        "11        11",
+        "11        11",
+        "11        11",
+        "111111111111",
+        "         11 ",
+        "         11 ",
+        "         11 ",
+        "         11 ",
+        "         11 "
+    };
+    Eigen::VectorXd digit4;
+    create_digit_from_pattern(pattern4, DIGIT_SIZE, &digit4);
+    Eigen::VectorXd target4(10);
+    target4 << 0, 0, 0, 0, 1, 0, 0, 0, 0, 0;
+    dataset->digits.push_back(digit4);
+    dataset->targets.push_back(target4);
     
-    // Сортируем студентов по среднему баллу
-    std::sort(all_stats.students.begin(), all_stats.students.end(),
-              [best](const StudentStats& a, const StudentStats& b) {
-                  return best ? (a.average_score > b.average_score) : (a.average_score < b.average_score);
+    // Цифра 5
+    std::vector<std::string> pattern5 = {
+        "111111111111",
+        "11          ",
+        "11          ",
+        "11          ",
+        "1111111111  ",
+        "         11 ",
+        "         11 ",
+        "         11 ",
+        "11        11",
+        " 1111111111 "
+    };
+    Eigen::VectorXd digit5;
+    create_digit_from_pattern(pattern5, DIGIT_SIZE, &digit5);
+    Eigen::VectorXd target5(10);
+    target5 << 0, 0, 0, 0, 0, 1, 0, 0, 0, 0;
+    dataset->digits.push_back(digit5);
+    dataset->targets.push_back(target5);
     
-    std::string title = best ? "Топ-" + std::to_string(count) + " лучших студентов:" : 
-                                 "Топ-" + std::to_string(count) + " проблемных студентов:";
-    std::cout << title << std::endl;
+    // Цифра 6
+    std::vector<std::string> pattern6 = {
+        " 1111111111 ",
+        "11        11",
+        "11          ",
+        "11          ",
+        "1111111111  ",
+        "11        11",
+        "11        11",
+        "11        11",
+        "11        11",
+        " 1111111111 "
+    };
+    Eigen::VectorXd digit6;
+    create_digit_from_pattern(pattern6, DIGIT_SIZE, &digit6);
+    Eigen::VectorXd target6(10);
+    target6 << 0, 0, 0, 0, 0, 0, 1, 0, 0, 0;
+    dataset->digits.push_back(digit6);
+    dataset->targets.push_back(target6);
     
-    int display_count = std::min(count, (int)all_stats.students.size());
-    for (int i = 0; i < display_count; i++) {
-        std::cout << "   " << (i+1) << ". " << all_stats.students[i].name << " " 
-                  << all_stats.students[i].surname 
-                  << " (возраст: " << all_stats.students[i].age 
-                  << ", балл: " << std::fixed << std::setprecision(2) 
-                  << all_stats.students[i].average_score << ")" << std::endl;
-    }
-    std::cout << std::endl;
-}
-
-// Функция комплексного анализа
-void comprehensive_analysis() {
-    std::cout << "=== КОМПЛЕКСНЫЙ АНАЛИЗ УСПЕВАЕМОСТИ ===" << std::endl;
-    std::cout << std::endl;
+    // Цифра 7
+    std::vector<std::string> pattern7 = {
+        "111111111111",
+        "         11 ",
+        "        11  ",
+        "       11   ",
+        "      11    ",
+        "     11     ",
+        "    11      ",
+        "   11       ",
+        "  11        ",
+        " 11         "
+    };
+    Eigen::VectorXd digit7;
+    create_digit_from_pattern(pattern7, DIGIT_SIZE, &digit7);
+    Eigen::VectorXd target7(10);
+    target7 << 0, 0, 0, 0, 0, 0, 0, 1, 0, 0;
+    dataset->digits.push_back(digit7);
+    dataset->targets.push_back(target7);
     
-    // Анализ отличников
-    clear_global_filter();
-    add_filter_condition("Средний_балл", "$gte", 85.0);
-    GroupStats excellent_stats = get_statistics_by_filter();
-    print_statistics(excellent_stats, "ОТЛИЧНИКИ (средний балл >= 85):");
+    // Цифра 8
+    std::vector<std::string> pattern8 = {
+        " 1111111111 ",
+        "11        11",
+        "11        11",
+        "11        11",
+        " 1111111111 ",
+        "11        11",
+        "11        11",
+        "11        11",
+        "11        11",
+        " 1111111111 "
+    };
+    Eigen::VectorXd digit8;
+    create_digit_from_pattern(pattern8, DIGIT_SIZE, &digit8);
+    Eigen::VectorXd target8(10);
+    target8 << 0, 0, 0, 0, 0, 0, 0, 0, 1, 0;
+    dataset->digits.push_back(digit8);
+    dataset->targets.push_back(target8);
     
-    // Анализ проблемных студентов
-    clear_global_filter();
-    add_filter_condition("Средний_балл", "$lt", 60.0);
-    GroupStats problem_stats = get_statistics_by_filter();
-    print_statistics(problem_stats, "ПРОБЛЕМНЫЕ СТУДЕНТЫ (средний балл < 60):");
-    
-    // Анализ средних студентов
-    clear_global_filter();
-    add_range_filter("Средний_балл", 60.0, 85.0);
-    GroupStats average_stats = get_statistics_by_filter();
-    print_statistics(average_stats, "СРЕДНИЕ СТУДЕНТЫ (балл 60-85):");
-    
-    // Общая статистика
-    clear_global_filter();
-    GroupStats overall_stats = get_statistics_by_filter();
-    print_statistics(overall_stats, "ОБЩАЯ СТАТИСТИКА:");
+    // Цифра 9
+    std::vector<std::string> pattern9 = {
+        " 1111111111 ",
+        "11        11",
+        "11        11",
+        "11        11",
+        " 11111111111",
+        "         11 ",
+        "         11 ",
+        "         11 ",
+        "11        11",
+        " 1111111111 "
+    };
+    Eigen::VectorXd digit9;
+    create_digit_from_pattern(pattern9, DIGIT_SIZE, &digit9);
+    Eigen::VectorXd target9(10);
+    target9 << 0, 0, 0, 0, 0, 0, 0, 0, 0, 1;
+    dataset->digits.push_back(digit9);
+    dataset->targets.push_back(target9);
 }
 
 int main() {
-    try {
-        // Инициализация подключения
-        init_mongodb_connection();
+    Dataset dataset;
+    create_dataset(&dataset);
+    
+    std::cout << "=== Отображение цифр из датасета ===" << std::endl;
+    for (size_t i = 0; i < dataset.digits.size(); ++i) {
+        std::cout << "Цифра " << i << ":" << std::endl;
+        display_digit(dataset.digits[i], 20, 20);
+    }
+    
+    // Создаём нейронную сеть
+    NeuralNetwork nn;
+    network_init(&nn, 0);  // MSE loss
+    
+    ActivationFunction sigmoid_act;
+    sigmoid_act.type = 0;
+    sigmoid_act.supports_hadamard_derivative = true;
+    
+    ActivationFunction softmax_act;
+    softmax_act.type = 2;
+    softmax_act.supports_hadamard_derivative = false;
+    
+    Layer layer1;
+    layer_init(&layer1, 400, 128, &sigmoid_act);
+    network_add_layer(&nn, &layer1);
+    
+    Layer layer2;
+    layer_init(&layer2, 128, 10, &softmax_act);
+    network_add_layer(&nn, &layer2);
+    
+    std::cout << "=== Обучение нейронной сети ===" << std::endl;
+    const int epochs = 500;
+    const double learning_rate = 0.1;
+    
+    for (int epoch = 0; epoch < epochs; ++epoch) {
+        double total_loss = 0.0;
+        for (size_t i = 0; i < dataset.digits.size(); ++i) {
+            double loss_val;
+            network_train(&nn, dataset.digits[i], dataset.targets[i], learning_rate, &loss_val);
+            total_loss += loss_val;
+        }
+        if (epoch % 20 == 0 || epoch == epochs - 1) {
+            std::cout << "Epoch " << epoch << ", Loss: " << total_loss / dataset.digits.size() << std::endl;
+        }
+    }
+    
+    std::cout << "\n=== Тестирование сети ===" << std::endl;
+    for (size_t i = 0; i < dataset.digits.size(); ++i) {
+        Eigen::VectorXd prediction;
+        network_predict(&nn, dataset.digits[i], &prediction);
         
-        std::cout << "=== СИСТЕМА АНАЛИЗА УСПЕВАЕМОСТИ СТУДЕНТОВ ===" << std::endl;
-        std::cout << std::endl;
+        int predicted_digit = 0;
+        double max_prob = prediction(0);
+        for (int j = 1; j < 10; ++j) {
+            if (prediction(j) > max_prob) {
+                max_prob = prediction(j);
+                predicted_digit = j;
+            }
+        }
         
-        // Комплексный анализ
-        comprehensive_analysis();
-        
-        // Анализ по возрастным группам
-        analyze_age_groups();
-        
-        // Анализ по диапазонам баллов
-        analyze_score_ranges();
-        
-        // Анализ по фамилиям
-        analyze_by_surnames();
-        
-        // Поиск топ студентов
-        find_top_students(5, true);  // Топ-5 лучших
-        find_top_students(5, false); // Топ-5 проблемных
-        
-        std::cout << "=== АНАЛИЗ ЗАВЕРШЕН ===" << std::endl;
-        
-    } catch (const std::exception& e) {
-        std::cerr << "Ошибка: " << e.what() << std::endl;
-        return 1;
+        std::cout << "Цифра " << i << ":" << std::endl;
+        display_digit(dataset.digits[i], 20, 20);
+        std::cout << "Предсказание: " << predicted_digit << " (вероятность: " << max_prob << ")" << std::endl;
+        std::cout << "---" << std::endl;
     }
     
     return 0;

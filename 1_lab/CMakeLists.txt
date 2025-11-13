@@ -45,18 +45,13 @@ add_executable(imperative_main2 1_task/imperativ/main2.cpp)
 
 # Второй таск
 # Процедурная парадигма
-#add_executable(procedural2_main1 2_task/procedur/main1.cpp)
-#add_executable(procedural2_main2 2_task/procedur/main2.cpp)
+add_executable(procedural2_main1 2_task/procedur/main1.cpp)
 
 # ООП парадигма
-#add_executable(oop2_main1 2_task/oop/main1.cpp)
-#add_executable(oop2_main2 2_task/oop/main2.cpp)
+add_executable(oop2_main1 2_task/oop/main1.cpp)
 
 # Императивная парадигма
-#add_executable(imperative2_main1 2_task/imperativ/main1.cpp)
-#add_executable(imperative2_main2 2_task/imperativ/main2.cpp)
-
-add_executable(NN_main task2_experimental/oop/main1.cpp)
+add_executable(imperative2_main1 2_task/imperativ/main1.cpp)
 
 # Линковка для первого таска
 target_link_libraries(procedural_main1 PRIVATE mongocxx bsoncxx)
@@ -66,19 +61,17 @@ target_link_libraries(oop_main2 PRIVATE mongocxx bsoncxx)
 target_link_libraries(imperative_main1 PRIVATE mongocxx bsoncxx)
 target_link_libraries(imperative_main2 PRIVATE mongocxx bsoncxx)
 
-# Линковка для второго таска
-#target_link_libraries(procedural2_main1 PRIVATE mongocxx bsoncxx)
-#target_link_libraries(procedural2_main2 PRIVATE mongocxx bsoncxx)
-#target_link_libraries(oop2_main1 PRIVATE mongocxx bsoncxx)
-#target_link_libraries(oop2_main2 PRIVATE mongocxx bsoncxx)
-#target_link_libraries(imperative2_main1 PRIVATE mongocxx bsoncxx)
-#target_link_libraries(imperative2_main2 PRIVATE mongocxx bsoncxx)
 
-
-# Подключение Eigen для NN_main
+# Подключение Eigen для всех нейронных сетей (task2)
 if(Eigen3_FOUND)
-    target_include_directories(NN_main PRIVATE ${EIGEN3_INCLUDE_DIR})
+    target_include_directories(procedural2_main1 PRIVATE ${EIGEN3_INCLUDE_DIR})
+    target_include_directories(oop2_main1 PRIVATE ${EIGEN3_INCLUDE_DIR})
+    target_include_directories(imperative2_main1 PRIVATE ${EIGEN3_INCLUDE_DIR})
 elseif(EIGEN3_INCLUDE_DIR)
-    target_include_directories(NN_main PRIVATE ${EIGEN3_INCLUDE_DIR})
+    target_include_directories(procedural2_main1 PRIVATE ${EIGEN3_INCLUDE_DIR})
+    target_include_directories(oop2_main1 PRIVATE ${EIGEN3_INCLUDE_DIR})
+    target_include_directories(imperative2_main1 PRIVATE ${EIGEN3_INCLUDE_DIR})
 endif()
-target_link_libraries(NN_main PRIVATE)
+target_link_libraries(procedural2_main1 PRIVATE)
+target_link_libraries(oop2_main1 PRIVATE)
+target_link_libraries(imperative2_main1 PRIVATE)
